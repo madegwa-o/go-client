@@ -53,7 +53,7 @@ Environment variables:
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `MQTT_BROKER` | MQTT broker URL | `tcp://broker.emqx.io:1883` |
+| `MQTT_BROKER` | MQTT broker URL | `tcp://localhost:1883` |
 | `MQTT_USERNAME` | Broker username, if required | `demo-user` |
 | `MQTT_PASSWORD` | Broker password, if required | `demo-password` |
 | `MQTT_CLIENT_ID` | Stable MQTT client ID | `raspberry-pi-vehicle-001` |
@@ -72,31 +72,67 @@ go run ./cmd/client
 
 The client logs JSON messages to stdout and publishes one telemetry payload per second.
 
-## Connecting to EMQX
+## Connecting to Mosquitto
 
-For a quick public test, use the EMQX public broker:
+The client is broker-agnostic, but the examples below use Eclipse Mosquitto.
+
+### Local Mosquitto broker
+
+Install Mosquitto and the command-line clients:
+
+```bash
+# Debian / Ubuntu / Raspberry Pi OS
+sudo apt-get update
+sudo apt-get install -y mosquitto mosquitto-clients
+```
+
+Start Mosquitto locally if your system service is not already running:
+
+```bash
+mosquitto -p 1883 -v
+```
+
+Use this local configuration:
 
 ```env
-MQTT_BROKER=tcp://broker.emqx.io:1883
+MQTT_BROKER=tcp://localhost:1883
 MQTT_USERNAME=
 MQTT_PASSWORD=
 MQTT_CLIENT_ID=raspberry-pi-vehicle-001
 MQTT_TOPIC=vehicle/vehicle-001/telemetry
 ```
 
-Subscribe with the EMQX MQTTX CLI or another MQTT client:
+Subscribe to all messages for the vehicle with `mosquitto_sub`:
 
 ```bash
-mqttx sub -h broker.emqx.io -p 1883 -t 'vehicle/vehicle-001/#'
+mosquitto_sub -h localhost -p 1883 -t 'vehicle/vehicle-001/#' -v
 ```
 
-Then start the Go client:
+Then start the Go client in another terminal:
 
 ```bash
 go run ./cmd/client
 ```
 
-For a private EMQX Cloud deployment, replace `MQTT_BROKER`, `MQTT_USERNAME`, and `MQTT_PASSWORD` with the connection details from your deployment. Use `ssl://host:8883` if your broker requires TLS.
+### Public Mosquitto test broker
+
+For a quick remote test, point the client at the public Mosquitto test broker:
+
+```env
+MQTT_BROKER=tcp://test.mosquitto.org:1883
+MQTT_USERNAME=
+MQTT_PASSWORD=
+MQTT_CLIENT_ID=raspberry-pi-vehicle-001
+MQTT_TOPIC=vehicle/vehicle-001/telemetry
+```
+
+Subscribe with:
+
+```bash
+mosquitto_sub -h test.mosquitto.org -p 1883 -t 'vehicle/vehicle-001/#' -v
+```
+
+Because the public broker is shared, use a unique `MQTT_CLIENT_ID` and topic prefix for real testing.
 
 ## Example MQTT topics
 
