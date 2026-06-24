@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -27,14 +28,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	configuredVehicleID := getenv("VEHICLE_ID", vehicleID)
 	cfg := mqttclient.Config{
-		Broker:   os.Getenv("MQTT_BROKER"),
-		Username: os.Getenv("MQTT_USERNAME"),
-		Password: os.Getenv("MQTT_PASSWORD"),
-		ClientID: getenv("MQTT_CLIENT_ID", "raspberry-pi-vehicle-001"),
+		Broker:             getenv("MQTT_BROKER", "ssl://c8c2713f.ala.eu-central-1.emqxsl.com:8883"),
+		Username:           os.Getenv("MQTT_USERNAME"),
+		Password:           os.Getenv("MQTT_PASSWORD"),
+		ClientID:           getenv("MQTT_CLIENT_ID", "raspberry-pi-"+configuredVehicleID),
+		CACertPath:         os.Getenv("MQTT_CA_CERT"),
+		InsecureSkipVerify: getenvBool("MQTT_INSECURE_SKIP_VERIFY", false),
 	}
-	telemetryTopic := getenv("MQTT_TOPIC", "vehicle/"+vehicleID+"/telemetry")
-	accidentTopic := "vehicle/" + vehicleID + "/accident"
+	telemetryTopic := getenv("MQTT_TOPIC", "vehicle/"+configuredVehicleID+"/telemetry")
+	accidentTopic := getenv("MQTT_ACCIDENT_TOPIC", "vehicle/"+configuredVehicleID+"/accident")
+	publishInterval := getenvDuration("PUBLISH_INTERVAL", time.Second)
 
 	client, err := mqttclient.NewClient(cfg, logger)
 	if err != nil {
@@ -47,11 +52,15 @@ func main() {
 	}
 	defer client.Disconnect()
 
-	generator := telemetry.NewGenerator()
-	ticker := time.NewTicker(time.Second)
+	generator := telemetry.NewGenerator(telemetry.GeneratorConfig{
+		VehicleID: configuredVehicleID,
+		Latitude:  getenvFloat("START_LATITUDE", -1.286389),
+		Longitude: getenvFloat("START_LONGITUDE", 36.817223),
+	})
+	ticker := time.NewTicker(publishInterval)
 	defer ticker.Stop()
 
-	logger.Info("telemetry client started", "telemetry_topic", telemetryTopic, "accident_topic", accidentTopic)
+	logger.Info("telemetry client started", "vehicle_id", configuredVehicleID, "telemetry_topic", telemetryTopic, "accident_topic", accidentTopic, "publish_interval", publishInterval.String())
 	for {
 		select {
 		case <-ctx.Done():
@@ -82,4 +91,40 @@ func getenv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getenvBool(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getenvFloat(key string, fallback float64) float64 {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getenvDuration(key string, fallback time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }

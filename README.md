@@ -53,11 +53,53 @@ Environment variables:
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `MQTT_BROKER` | MQTT broker URL | `tcp://localhost:1883` |
+| `MQTT_BROKER` | MQTT broker URL. Use `ssl://` for MQTT over TLS. | `ssl://c8c2713f.ala.eu-central-1.emqxsl.com:8883` |
 | `MQTT_USERNAME` | Broker username, if required | `demo-user` |
 | `MQTT_PASSWORD` | Broker password, if required | `demo-password` |
+| `MQTT_CA_CERT` | Optional path to the downloaded CA certificate PEM | `/home/pi/emqxsl-ca.pem` |
+| `MQTT_INSECURE_SKIP_VERIFY` | Disable TLS certificate verification. Keep `false` outside quick tests. | `false` |
+| `VEHICLE_ID` | Vehicle ID included in JSON payloads and default topic names | `vehicle-001` |
 | `MQTT_CLIENT_ID` | Stable MQTT client ID | `raspberry-pi-vehicle-001` |
 | `MQTT_TOPIC` | Regular telemetry topic | `vehicle/vehicle-001/telemetry` |
+| `MQTT_ACCIDENT_TOPIC` | High-priority accident topic | `vehicle/vehicle-001/accident` |
+| `PUBLISH_INTERVAL` | Telemetry publish interval | `1s` |
+| `START_LATITUDE` | Initial mock GPS latitude | `-1.286389` |
+| `START_LONGITUDE` | Initial mock GPS longitude | `36.817223` |
+
+## Connecting to your EMQX Cloud broker
+
+Your broker details from the screenshot use MQTT over TLS on port `8883`:
+
+```env
+MQTT_BROKER=ssl://c8c2713f.ala.eu-central-1.emqxsl.com:8883
+MQTT_USERNAME=your-emqx-username
+MQTT_PASSWORD=your-emqx-password
+VEHICLE_ID=vehicle-001
+MQTT_CLIENT_ID=raspberry-pi-vehicle-001
+MQTT_TOPIC=vehicle/vehicle-001/telemetry
+MQTT_ACCIDENT_TOPIC=vehicle/vehicle-001/accident
+PUBLISH_INTERVAL=1s
+```
+
+If EMQX requires its CA certificate, download it from the EMQX console and copy
+it to the Raspberry Pi, then set `MQTT_CA_CERT` to that file path:
+
+```env
+MQTT_CA_CERT=/home/pi/emqxsl-ca.pem
+```
+
+Run the client on the Pi after loading `.env`:
+
+```bash
+set -a
+source .env
+set +a
+go run ./cmd/client
+```
+
+The client publishes JSON car telemetry every second to `MQTT_TOPIC`. The mock
+GPS generator starts at `START_LATITUDE` and `START_LONGITUDE` and simulates
+movement until you replace it with real GPS/sensor reads on the Raspberry Pi.
 
 ## Running locally
 
