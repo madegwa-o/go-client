@@ -2,9 +2,12 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
@@ -16,10 +19,12 @@ const publishTimeout = 10 * time.Second
 // variables. Keeping configuration at the edge makes this package reusable in
 // tests, Raspberry Pi services, and future sensor-backed binaries.
 type Config struct {
-	Broker   string
-	Username string
-	Password string
-	ClientID string
+	Broker             string
+	Username           string
+	Password           string
+	ClientID           string
+	CACertPath         string
+	InsecureSkipVerify bool
 }
 
 // Client wraps the Eclipse Paho client and centralizes MQTT behavior such as
@@ -39,6 +44,11 @@ func NewClient(cfg Config, logger *slog.Logger) (*Client, error) {
 		return nil, fmt.Errorf("MQTT_CLIENT_ID is required")
 	}
 
+	tlsConfig, err := newTLSConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := paho.NewClientOptions().
 		AddBroker(cfg.Broker).
 		SetClientID(cfg.ClientID).
@@ -50,6 +60,9 @@ func NewClient(cfg Config, logger *slog.Logger) (*Client, error) {
 		SetConnectRetryInterval(5 * time.Second).
 		SetKeepAlive(30 * time.Second).
 		SetPingTimeout(10 * time.Second)
+	if tlsConfig != nil {
+		opts.SetTLSConfig(tlsConfig)
+	}
 
 	opts.OnConnect = func(_ paho.Client) {
 		logger.Info("mqtt connected", "broker", cfg.Broker, "client_id", cfg.ClientID)
@@ -62,6 +75,33 @@ func NewClient(cfg Config, logger *slog.Logger) (*Client, error) {
 	}
 
 	return &Client{client: paho.NewClient(opts), logger: logger}, nil
+}
+
+func newTLSConfig(cfg Config) (*tls.Config, error) {
+	if cfg.CACertPath == "" && !cfg.InsecureSkipVerify {
+		return nil, nil
+	}
+
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.InsecureSkipVerify}
+	if cfg.CACertPath == "" {
+		return tlsConfig, nil
+	}
+
+	certPool, err := x509.SystemCertPool()
+	if err != nil || certPool == nil {
+		certPool = x509.NewCertPool()
+	}
+
+	caCert, err := os.ReadFile(cfg.CACertPath)
+	if err != nil {
+		return nil, fmt.Errorf("read MQTT_CA_CERT %q: %w", cfg.CACertPath, err)
+	}
+	if ok := certPool.AppendCertsFromPEM(caCert); !ok {
+		return nil, fmt.Errorf("MQTT_CA_CERT %q does not contain a valid PEM certificate", cfg.CACertPath)
+	}
+	tlsConfig.RootCAs = certPool
+
+	return tlsConfig, nil
 }
 
 // Connect establishes the broker connection and waits until Paho reports a

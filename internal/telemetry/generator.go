@@ -10,10 +10,19 @@ import (
 )
 
 const (
-	vehicleID = "vehicle-001"
-	minSpeed  = 0.0
-	maxSpeed  = 120.0
+	defaultVehicleID = "vehicle-001"
+	minSpeed         = 0.0
+	maxSpeed         = 120.0
 )
+
+// GeneratorConfig controls the initial mock telemetry state. On a Raspberry Pi,
+// set the starting GPS coordinates close to the vehicle's real location until
+// this generator is replaced by sensor-backed readers.
+type GeneratorConfig struct {
+	VehicleID string
+	Latitude  float64
+	Longitude float64
+}
 
 // Generator owns the mock vehicle state. In production this package can be
 // replaced by Raspberry Pi sensor readers and YOLO accident-detection events
@@ -31,14 +40,17 @@ type Generator struct {
 }
 
 // NewGenerator creates a generator seeded with the requested starting point.
-func NewGenerator() *Generator {
+func NewGenerator(cfg GeneratorConfig) *Generator {
+	if cfg.VehicleID == "" {
+		cfg.VehicleID = defaultVehicleID
+	}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	g := &Generator{
 		rng:       rng,
-		vehicleID: vehicleID,
+		vehicleID: cfg.VehicleID,
 		speed:     72.5,
-		latitude:  -1.286389,
-		longitude: 36.817223,
+		latitude:  cfg.Latitude,
+		longitude: cfg.Longitude,
 		heading:   180.0,
 	}
 	g.scheduleNextAccident(time.Now())
